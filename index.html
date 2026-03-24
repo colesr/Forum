@@ -140,6 +140,7 @@
     
     input[type="text"],
     input[type="password"],
+    input[type="email"],
     textarea {
       width: 100%;
       padding: 8px 10px;
@@ -182,6 +183,12 @@
     
     button:active {
       transform: translateY(0);
+    }
+    
+    button:disabled {
+      background: var(--gray);
+      cursor: not-allowed;
+      transform: none;
     }
     
     .secondary-btn {
@@ -441,6 +448,12 @@
       border-left: 3px solid #008800;
     }
     
+    .message.info {
+      background: #e0f0ff;
+      color: #0066cc;
+      border-left: 3px solid #0066cc;
+    }
+    
     .back-link {
       display: inline-block;
       color: var(--green);
@@ -453,6 +466,12 @@
     .back-link:hover {
       text-decoration: underline;
       transform: translateX(-3px);
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--gray);
     }
   </style>
 </head>
@@ -470,25 +489,54 @@
   </header>
 
   <div class="container" id="app">
-    <!-- Content will be dynamically inserted here -->
+    <div class="loading">Loading...</div>
   </div>
 
-  <script>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, addDoc, getDocs, getDoc, doc, updateDoc, query, orderBy, where, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+    // Firebase configuration - YOU NEED TO REPLACE THIS WITH YOUR OWN CONFIG
+    const firebaseConfig = {
+  apiKey: "AIzaSyCZSmJQkufGrtgcVZk0d6QpA6kiIm3jWF0",
+  authDomain: "my-forum-9876f.firebaseapp.com",
+  projectId: "my-forum-9876f",
+  storageBucket: "my-forum-9876f.firebasestorage.app",
+  messagingSenderId: "181109690022",
+  appId: "1:181109690022:web:a5093166beb719fb46ae67",
+  measurementId: "G-452Y9P00WE"
+};
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
     // State Management
     let currentUser = null;
     let currentView = 'home';
     let currentThreadId = null;
+    let threadsListener = null;
+    let commentsListener = null;
 
     // Initialize app
-    async function init() {
-      // Check if user is logged in
-      const savedUser = localStorage.getItem('currentUser');
-      if (savedUser) {
-        currentUser = savedUser;
-      }
+    function init() {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          currentUser = user;
+          updateNav();
+          if (currentView === 'login' || currentView === 'register') {
+            showHome();
+          }
+        } else {
+          currentUser = null;
+          updateNav();
+        }
+      });
       
-      await showHome();
-      updateNav();
+      showHome();
     }
 
     // Navigation
@@ -497,21 +545,22 @@
       const userInfo = document.getElementById('userInfo');
       
       if (currentUser) {
+        const username = currentUser.email.split('@')[0];
         nav.innerHTML = `
-          <a href="#" onclick="showHome(); return false;">threads</a>
-          <a href="#" onclick="showNewThread(); return false;">submit</a>
+          <a href="#" onclick="window.showHome(); return false;">threads</a>
+          <a href="#" onclick="window.showNewThread(); return false;">submit</a>
         `;
         userInfo.innerHTML = `
-          <span>${currentUser}</span>
-          <a href="#" onclick="logout(); return false;">logout</a>
+          <span>${username}</span>
+          <a href="#" onclick="window.logout(); return false;">logout</a>
         `;
       } else {
         nav.innerHTML = `
-          <a href="#" onclick="showHome(); return false;">threads</a>
+          <a href="#" onclick="window.showHome(); return false;">threads</a>
         `;
         userInfo.innerHTML = `
-          <a href="#" onclick="showLogin(); return false;">login</a>
-          <a href="#" onclick="showRegister(); return false;">register</a>
+          <a href="#" onclick="window.showLogin(); return false;">login</a>
+          <a href="#" onclick="window.showRegister(); return false;">register</a>
         `;
       }
     }
@@ -521,40 +570,53 @@
       currentView = 'home';
       const app = document.getElementById('app');
       
-      const threads = await getAllThreads();
+      app.innerHTML = '<div class="loading">Loading threads...</div>';
       
-      let html = '<div class="thread-list">';
+      // Clean up old listener
+      if (threadsListener) threadsListener();
       
-      if (threads.length === 0) {
-        html += '<div class="message">No threads yet. Be the first to post!</div>';
-      } else {
-        for (const thread of threads) {
-          const comments = await getThreadComments(thread.id);
-          const userLiked = thread.likedBy && thread.likedBy.includes(currentUser);
-          
-          html += `
-            <div class="thread-item">
-              <div class="thread-header">
-                <div class="vote-section">
-                  <span class="upvote ${userLiked ? 'liked' : ''}" onclick="toggleLike('thread', '${thread.id}')">▲</span>
-                  <span class="vote-count">${thread.likes || 0}</span>
-                </div>
-                <div class="thread-content">
-                  <div class="thread-title">
-                    <a href="#" onclick="showThread('${thread.id}'); return false;">${escapeHtml(thread.title)}</a>
+      // Real-time listener for threads
+      const threadsQuery = query(collection(db, 'threads'), orderBy('timestamp', 'desc'));
+      threadsListener = onSnapshot(threadsQuery, async (snapshot) => {
+        const threads = [];
+        snapshot.forEach((doc) => {
+          threads.push({ id: doc.id, ...doc.data() });
+        });
+        
+        let html = '<div class="thread-list">';
+        
+        if (threads.length === 0) {
+          html += '<div class="message info">No threads yet. Be the first to post!</div>';
+        } else {
+          for (const thread of threads) {
+            const commentsSnapshot = await getDocs(query(collection(db, 'comments'), where('threadId', '==', thread.id)));
+            const commentCount = commentsSnapshot.size;
+            const userLiked = currentUser && thread.likedBy && thread.likedBy.includes(currentUser.uid);
+            
+            html += `
+              <div class="thread-item">
+                <div class="thread-header">
+                  <div class="vote-section">
+                    <span class="upvote ${userLiked ? 'liked' : ''}" onclick="window.toggleLike('thread', '${thread.id}')">▲</span>
+                    <span class="vote-count">${thread.likes || 0}</span>
                   </div>
-                  <div class="thread-meta">
-                    by ${thread.author} | ${formatTime(thread.timestamp)} | ${comments.length} comments
+                  <div class="thread-content">
+                    <div class="thread-title">
+                      <a href="#" onclick="window.showThread('${thread.id}'); return false;">${escapeHtml(thread.title)}</a>
+                    </div>
+                    <div class="thread-meta">
+                      by ${thread.author} | ${formatTime(thread.timestamp)} | ${commentCount} comments
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          `;
+            `;
+          }
         }
-      }
-      
-      html += '</div>';
-      app.innerHTML = html;
+        
+        html += '</div>';
+        app.innerHTML = html;
+      });
     }
 
     async function showThread(threadId) {
@@ -562,18 +624,28 @@
       currentThreadId = threadId;
       const app = document.getElementById('app');
       
+      app.innerHTML = '<div class="loading">Loading thread...</div>';
+      
+      // Clean up old listener
+      if (commentsListener) commentsListener();
+      
       try {
-        const thread = await getThread(threadId);
-        const comments = await getThreadComments(threadId);
-        const userLiked = thread.likedBy && thread.likedBy.includes(currentUser);
+        const threadDoc = await getDoc(doc(db, 'threads', threadId));
+        if (!threadDoc.exists()) {
+          app.innerHTML = `<div class="message error">Thread not found.</div>`;
+          return;
+        }
+        
+        const thread = { id: threadDoc.id, ...threadDoc.data() };
+        const userLiked = currentUser && thread.likedBy && thread.likedBy.includes(currentUser.uid);
         
         let html = `
-          <a href="#" class="back-link" onclick="showHome(); return false;">← back to threads</a>
+          <a href="#" class="back-link" onclick="window.showHome(); return false;">← back to threads</a>
           
           <div class="thread-detail">
             <div class="thread-header">
               <div class="vote-section">
-                <span class="upvote ${userLiked ? 'liked' : ''}" onclick="toggleLike('thread', '${thread.id}')">▲</span>
+                <span class="upvote ${userLiked ? 'liked' : ''}" onclick="window.toggleLike('thread', '${thread.id}')">▲</span>
                 <span class="vote-count">${thread.likes || 0}</span>
               </div>
               <div class="thread-content">
@@ -589,42 +661,59 @@
           ${currentUser ? `
             <div class="new-thread-form">
               <h2>Add a comment</h2>
-              <form onsubmit="submitComment(event)">
+              <form onsubmit="window.submitComment(event); return false;">
                 <div class="form-group">
                   <textarea id="commentText" placeholder="What are your thoughts?" required></textarea>
                 </div>
                 <button type="submit">Post Comment</button>
               </form>
             </div>
-          ` : '<div class="message">Please <a href="#" onclick="showLogin(); return false;">login</a> to comment.</div>'}
+          ` : '<div class="message info">Please <a href="#" onclick="window.showLogin(); return false;">login</a> to comment.</div>'}
           
           <div class="comments-section">
-            <h2>${comments.length} Comments</h2>
+            <h2 id="commentCount">Comments</h2>
             <div id="commentsList">
+              <div class="loading">Loading comments...</div>
+            </div>
+          </div>
         `;
         
-        for (const comment of comments) {
-          const commentLiked = comment.likedBy && comment.likedBy.includes(currentUser);
-          html += `
-            <div class="comment">
-              <div class="comment-header">
-                <span class="comment-author">${comment.author}</span>
-                <span class="comment-time">${formatTime(comment.timestamp)}</span>
-              </div>
-              <div class="comment-body">${escapeHtml(comment.content)}</div>
-              <div class="comment-actions">
-                <a onclick="toggleLike('comment', '${comment.id}')" class="${commentLiked ? 'liked' : ''}">
-                  ▲ ${comment.likes || 0}
-                </a>
-              </div>
-            </div>
-          `;
-        }
-        
-        html += '</div></div>';
         app.innerHTML = html;
+        
+        // Real-time listener for comments
+        const commentsQuery = query(collection(db, 'comments'), where('threadId', '==', threadId), orderBy('timestamp', 'asc'));
+        commentsListener = onSnapshot(commentsQuery, (snapshot) => {
+          const comments = [];
+          snapshot.forEach((doc) => {
+            comments.push({ id: doc.id, ...doc.data() });
+          });
+          
+          document.getElementById('commentCount').textContent = `${comments.length} Comments`;
+          
+          let commentsHtml = '';
+          for (const comment of comments) {
+            const commentLiked = currentUser && comment.likedBy && comment.likedBy.includes(currentUser.uid);
+            commentsHtml += `
+              <div class="comment">
+                <div class="comment-header">
+                  <span class="comment-author">${comment.author}</span>
+                  <span class="comment-time">${formatTime(comment.timestamp)}</span>
+                </div>
+                <div class="comment-body">${escapeHtml(comment.content)}</div>
+                <div class="comment-actions">
+                  <a onclick="window.toggleLike('comment', '${comment.id}')" class="${commentLiked ? 'liked' : ''}">
+                    ▲ ${comment.likes || 0}
+                  </a>
+                </div>
+              </div>
+            `;
+          }
+          
+          document.getElementById('commentsList').innerHTML = commentsHtml || '<div class="message info">No comments yet. Be the first to comment!</div>';
+        });
       } catch (error) {
-        app.innerHTML = `<div class="message error">Thread not found.</div>`;
+        console.error('Error loading thread:', error);
+        app.innerHTML = `<div class="message error">Error loading thread.</div>`;
       }
     }
 
@@ -634,10 +723,10 @@
       app.innerHTML = `
         <div class="auth-container">
           <h2>Login</h2>
-          <form onsubmit="handleLogin(event)">
+          <form onsubmit="window.handleLogin(event); return false;">
             <div class="form-group">
-              <label for="username">Username</label>
-              <input type="text" id="username" required>
+              <label for="email">Email</label>
+              <input type="email" id="email" required>
             </div>
             <div class="form-group">
               <label for="password">Password</label>
@@ -646,7 +735,7 @@
             <button type="submit">Login</button>
           </form>
           <div class="auth-toggle">
-            Don't have an account? <a href="#" onclick="showRegister(); return false;">Register</a>
+            Don't have an account? <a href="#" onclick="window.showRegister(); return false;">Register</a>
           </div>
         </div>
       `;
@@ -658,10 +747,10 @@
       app.innerHTML = `
         <div class="auth-container">
           <h2>Create Account</h2>
-          <form onsubmit="handleRegister(event)">
+          <form onsubmit="window.handleRegister(event); return false;">
             <div class="form-group">
-              <label for="username">Username</label>
-              <input type="text" id="username" required minlength="3">
+              <label for="email">Email</label>
+              <input type="email" id="email" required>
             </div>
             <div class="form-group">
               <label for="password">Password</label>
@@ -670,7 +759,7 @@
             <button type="submit">Create Account</button>
           </form>
           <div class="auth-toggle">
-            Already have an account? <a href="#" onclick="showLogin(); return false;">Login</a>
+            Already have an account? <a href="#" onclick="window.showLogin(); return false;">Login</a>
           </div>
         </div>
       `;
@@ -685,11 +774,11 @@
       currentView = 'newThread';
       const app = document.getElementById('app');
       app.innerHTML = `
-        <a href="#" class="back-link" onclick="showHome(); return false;">← back to threads</a>
+        <a href="#" class="back-link" onclick="window.showHome(); return false;">← back to threads</a>
         
         <div class="new-thread-form">
           <h2>Submit a new thread</h2>
-          <form onsubmit="submitThread(event)">
+          <form onsubmit="window.submitThread(event); return false;">
             <div class="form-group">
               <label for="threadTitle">Title</label>
               <input type="text" id="threadTitle" required>
@@ -699,7 +788,7 @@
               <textarea id="threadContent"></textarea>
             </div>
             <button type="submit">Submit</button>
-            <button type="button" class="secondary-btn" onclick="showHome()">Cancel</button>
+            <button type="button" class="secondary-btn" onclick="window.showHome()">Cancel</button>
           </form>
         </div>
       `;
@@ -708,69 +797,56 @@
     // Authentication handlers
     async function handleLogin(event) {
       event.preventDefault();
-      const username = document.getElementById('username').value;
+      const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
+      const btn = event.target.querySelector('button[type="submit"]');
+      
+      btn.disabled = true;
+      btn.textContent = 'Logging in...';
       
       try {
-        const user = await window.storage.get(`user:${username}`);
-        
-        if (!user) {
-          showMessage('User not found', 'error');
-          return;
-        }
-        
-        const userData = JSON.parse(user.value);
-        
-        if (userData.password !== password) {
-          showMessage('Invalid password', 'error');
-          return;
-        }
-        
-        currentUser = username;
-        localStorage.setItem('currentUser', username);
-        updateNav();
+        await signInWithEmailAndPassword(auth, email, password);
         showHome();
         showMessage('Logged in successfully!', 'success');
       } catch (error) {
-        showMessage('User not found', 'error');
+        showMessage('Invalid email or password', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Login';
       }
     }
 
     async function handleRegister(event) {
       event.preventDefault();
-      const username = document.getElementById('username').value;
+      const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
+      const btn = event.target.querySelector('button[type="submit"]');
+      
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
       
       try {
-        const existingUser = await window.storage.get(`user:${username}`);
-        if (existingUser) {
-          showMessage('Username already exists', 'error');
-          return;
-        }
+        await createUserWithEmailAndPassword(auth, email, password);
+        showHome();
+        showMessage('Account created successfully!', 'success');
       } catch (error) {
-        // User doesn't exist, which is what we want
+        if (error.code === 'auth/email-already-in-use') {
+          showMessage('Email already in use', 'error');
+        } else {
+          showMessage('Error creating account: ' + error.message, 'error');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
       }
-      
-      const userData = {
-        password: password,
-        createdAt: Date.now()
-      };
-      
-      await window.storage.set(`user:${username}`, JSON.stringify(userData));
-      
-      currentUser = username;
-      localStorage.setItem('currentUser', username);
-      updateNav();
-      showHome();
-      showMessage('Account created successfully!', 'success');
     }
 
-    function logout() {
-      currentUser = null;
-      localStorage.removeItem('currentUser');
-      updateNav();
-      showHome();
-      showMessage('Logged out successfully', 'success');
+    async function logout() {
+      try {
+        await signOut(auth);
+        showHome();
+        showMessage('Logged out successfully', 'success');
+      } catch (error) {
+        showMessage('Error logging out', 'error');
+      }
     }
 
     // Thread handlers
@@ -779,44 +855,62 @@
       
       const title = document.getElementById('threadTitle').value;
       const content = document.getElementById('threadContent').value;
+      const btn = event.target.querySelector('button[type="submit"]');
       
-      const threadId = 'thread_' + Date.now();
-      const thread = {
-        id: threadId,
-        title: title,
-        content: content,
-        author: currentUser,
-        timestamp: Date.now(),
-        likes: 0,
-        likedBy: []
-      };
+      btn.disabled = true;
+      btn.textContent = 'Posting...';
       
-      await window.storage.set(threadId, JSON.stringify(thread));
-      
-      showHome();
-      showMessage('Thread created!', 'success');
+      try {
+        await addDoc(collection(db, 'threads'), {
+          title: title,
+          content: content,
+          author: currentUser.email.split('@')[0],
+          authorId: currentUser.uid,
+          timestamp: serverTimestamp(),
+          likes: 0,
+          likedBy: []
+        });
+        
+        showHome();
+        showMessage('Thread created!', 'success');
+      } catch (error) {
+        console.error('Error creating thread:', error);
+        showMessage('Error creating thread', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Submit';
+      }
     }
 
     async function submitComment(event) {
       event.preventDefault();
       
       const content = document.getElementById('commentText').value;
+      const btn = event.target.querySelector('button[type="submit"]');
       
-      const commentId = 'comment_' + Date.now();
-      const comment = {
-        id: commentId,
-        threadId: currentThreadId,
-        content: content,
-        author: currentUser,
-        timestamp: Date.now(),
-        likes: 0,
-        likedBy: []
-      };
+      btn.disabled = true;
+      btn.textContent = 'Posting...';
       
-      await window.storage.set(commentId, JSON.stringify(comment));
-      
-      showThread(currentThreadId);
-      showMessage('Comment posted!', 'success');
+      try {
+        await addDoc(collection(db, 'comments'), {
+          threadId: currentThreadId,
+          content: content,
+          author: currentUser.email.split('@')[0],
+          authorId: currentUser.uid,
+          timestamp: serverTimestamp(),
+          likes: 0,
+          likedBy: []
+        });
+        
+        document.getElementById('commentText').value = '';
+        showMessage('Comment posted!', 'success');
+        btn.disabled = false;
+        btn.textContent = 'Post Comment';
+      } catch (error) {
+        console.error('Error posting comment:', error);
+        showMessage('Error posting comment', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Post Comment';
+      }
     }
 
     // Like functionality
@@ -827,80 +921,36 @@
       }
       
       try {
-        const result = await window.storage.get(id);
-        const item = JSON.parse(result.value);
+        const collectionName = type === 'thread' ? 'threads' : 'comments';
+        const docRef = doc(db, collectionName, id);
+        const docSnap = await getDoc(docRef);
         
-        if (!item.likedBy) {
-          item.likedBy = [];
-        }
+        if (!docSnap.exists()) return;
         
-        const userIndex = item.likedBy.indexOf(currentUser);
+        const data = docSnap.data();
+        const likedBy = data.likedBy || [];
+        const userIndex = likedBy.indexOf(currentUser.uid);
+        
+        let newLikes = data.likes || 0;
+        let newLikedBy = [...likedBy];
         
         if (userIndex > -1) {
           // Unlike
-          item.likedBy.splice(userIndex, 1);
-          item.likes = (item.likes || 0) - 1;
+          newLikedBy.splice(userIndex, 1);
+          newLikes = Math.max(0, newLikes - 1);
         } else {
           // Like
-          item.likedBy.push(currentUser);
-          item.likes = (item.likes || 0) + 1;
+          newLikedBy.push(currentUser.uid);
+          newLikes = newLikes + 1;
         }
         
-        await window.storage.set(id, JSON.stringify(item));
-        
-        // Refresh current view
-        if (currentView === 'home') {
-          showHome();
-        } else if (currentView === 'thread') {
-          showThread(currentThreadId);
-        }
+        await updateDoc(docRef, {
+          likes: newLikes,
+          likedBy: newLikedBy
+        });
       } catch (error) {
         console.error('Error toggling like:', error);
-      }
-    }
-
-    // Data retrieval helpers
-    async function getAllThreads() {
-      try {
-        const keys = await window.storage.list('thread_');
-        const threads = [];
-        
-        for (const key of keys.keys) {
-          const result = await window.storage.get(key);
-          threads.push(JSON.parse(result.value));
-        }
-        
-        // Sort by timestamp descending
-        threads.sort((a, b) => b.timestamp - a.timestamp);
-        return threads;
-      } catch (error) {
-        return [];
-      }
-    }
-
-    async function getThread(threadId) {
-      const result = await window.storage.get(threadId);
-      return JSON.parse(result.value);
-    }
-
-    async function getThreadComments(threadId) {
-      try {
-        const keys = await window.storage.list('comment_');
-        const comments = [];
-        
-        for (const key of keys.keys) {
-          const result = await window.storage.get(key);
-          const comment = JSON.parse(result.value);
-          if (comment.threadId === threadId) {
-            comments.push(comment);
-          }
-        }
-        
-        // Sort by timestamp ascending
-        comments.sort((a, b) => a.timestamp - b.timestamp);
-        return comments;
-      } catch (error) {
-        return [];
+        showMessage('Error updating vote', 'error');
       }
     }
 
@@ -912,8 +962,11 @@
     }
 
     function formatTime(timestamp) {
-      const now = Date.now();
-      const diff = now - timestamp;
+      if (!timestamp) return 'just now';
+      
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      const now = new Date();
+      const diff = now - date;
       
       const minutes = Math.floor(diff / 60000);
       const hours = Math.floor(diff / 3600000);
@@ -938,6 +991,19 @@
         setTimeout(() => message.remove(), 300);
       }, 3000);
     }
+
+    // Export functions to window for onclick handlers
+    window.showHome = showHome;
+    window.showThread = showThread;
+    window.showLogin = showLogin;
+    window.showRegister = showRegister;
+    window.showNewThread = showNewThread;
+    window.handleLogin = handleLogin;
+    window.handleRegister = handleRegister;
+    window.logout = logout;
+    window.submitThread = submitThread;
+    window.submitComment = submitComment;
+    window.toggleLike = toggleLike;
 
     // Initialize on load
     init();
