@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forum</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --orange: #ff6600;
+      --orange-dark: #e55a00;
+      --bg: #f6f6ef;
+      --text: #000000;
+      --gray: #828282;
+      --border: #e0e0e0;
+      --white: #ffffff;
+    }
+    
+    body {
+      font-family: 'IBM Plex Serif', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    
+    /* Header */
+    header {
+      background: var(--orange);
+      padding: 4px 8px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .logo {
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--white);
+      text-decoration: none;
+      background: rgba(255,255,255,0.15);
+      padding: 4px 8px;
+      border-radius: 2px;
+      transition: all 0.2s;
+    }
+    
+    .logo:hover {
+      background: rgba(255,255,255,0.25);
+      transform: translateY(-1px);
+    }
+    
+    nav {
+      display: flex;
+      gap: 15px;
+      flex: 1;
+      align-items: center;
+    }
+    
+    nav a {
+      color: var(--white);
+      text-decoration: none;
+      font-size: 13px;
+      transition: opacity 0.2s;
+    }
+    
+    nav a:hover {
+      opacity: 0.8;
+    }
+    
+    .user-info {
+      color: var(--white);
+      font-size: 13px;
+      margin-left: auto;
+    }
+    
+    .user-info a {
+      color: var(--white);
+      text-decoration: none;
+      margin-left: 10px;
+      opacity: 0.9;
+      transition: opacity 0.2s;
+    }
+    
+    .user-info a:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    
+    /* Main Container */
+    .container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    
+    /* Auth Forms */
+    .auth-container {
+      max-width: 400px;
+      margin: 60px auto;
+      background: var(--white);
+      padding: 30px;
+      border-radius: 3px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .auth-container h2 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+    
+    .form-group {
+      margin-bottom: 18px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-family: 'IBM Plex Serif', Georgia, serif;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--orange);
+    }
+    
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+    
+    button {
+      background: var(--orange);
+      color: var(--white);
+      border: none;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-family: 'IBM Plex Serif', Georgia, serif;
+      font-weight: 500;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button:hover {
+      background: var(--orange-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(255,102,0,0.3);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    .secondary-btn {
+      background: var(--gray);
+      margin-left: 10px;
+    }
+    
+    .secondary-btn:hover {
+      background: #6a6a6a;
+    }
+    
+    .auth-toggle {
+      margin-top: 15px;
+      font-size: 13px;
+      color: var(--gray);
+    }
+    
+    .auth-toggle a {
+      color: var(--orange);
+      text-decoration: none;
+    }
+    
+    .auth-toggle a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Thread List */
+    .thread-item {
+      background: var(--white);
+      padding: 12px 15px;
+      margin-bottom: 8px;
+      border-radius: 2px;
+      transition: all 0.2s;
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .thread-item:hover {
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      transform: translateX(2px);
+    }
+    
+    .thread-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    
+    .vote-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .upvote {
+      cursor: pointer;
+      color: var(--gray);
+      font-size: 18px;
+      line-height: 1;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    
+    .upvote:hover {
+      color: var(--orange);
+      transform: scale(1.2);
+    }
+    
+    .upvote.liked {
+      color: var(--orange);
+    }
+    
+    .vote-count {
+      font-size: 11px;
+      color: var(--gray);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    
+    .thread-content {
+      flex: 1;
+    }
+    
+    .thread-title {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    
+    .thread-title a {
+      color: var(--text);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .thread-title a:hover {
+      color: var(--orange);
+    }
+    
+    .thread-meta {
+      font-size: 11px;
+      color: var(--gray);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    
+    .thread-meta a {
+      color: var(--gray);
+      text-decoration: none;
+    }
+    
+    .thread-meta a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Thread Detail */
+    .thread-detail {
+      background: var(--white);
+      padding: 20px;
+      border-radius: 2px;
+      margin-bottom: 20px;
+    }
+    
+    .thread-detail h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    
+    .thread-body {
+      margin: 15px 0;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    
+    /* Comments */
+    .comments-section {
+      margin-top: 30px;
+    }
+    
+    .comments-section h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    
+    .comment {
+      background: var(--white);
+      padding: 12px 15px;
+      margin-bottom: 8px;
+      border-radius: 2px;
+      border-left: 2px solid var(--border);
+      transition: all 0.2s;
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .comment:hover {
+      border-left-color: var(--orange);
+      background: #fafaf8;
+    }
+    
+    .comment-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .comment-author {
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 500;
+      color: var(--text);
+    }
+    
+    .comment-time {
+      font-size: 11px;
+      color: var(--gray);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    
+    .comment-body {
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 8px;
+      white-space: pre-wrap;
+    }
+    
+    .comment-actions {
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    
+    .comment-actions a {
+      color: var(--gray);
+      text-decoration: none;
+      margin-right: 12px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    
+    .comment-actions a:hover {
+      color: var(--orange);
+      text-decoration: underline;
+    }
+    
+    .comment-actions .liked {
+      color: var(--orange);
+    }
+    
+    /* New Thread Form */
+    .new-thread-form {
+      background: var(--white);
+      padding: 20px;
+      border-radius: 2px;
+      margin-bottom: 20px;
+    }
+    
+    .new-thread-form h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    
+    /* Utilities */
+    .hidden {
+      display: none;
+    }
+    
+    .message {
+      padding: 12px 15px;
+      border-radius: 2px;
+      margin-bottom: 15px;
+      font-size: 13px;
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .message.error {
+      background: #ffe0e0;
+      color: #cc0000;
+      border-left: 3px solid #cc0000;
+    }
+    
+    .message.success {
+      background: #e0ffe0;
+      color: #008800;
+      border-left: 3px solid #008800;
+    }
+    
+    .back-link {
+      display: inline-block;
+      color: var(--orange);
+      text-decoration: none;
+      margin-bottom: 15px;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    
+    .back-link:hover {
+      text-decoration: underline;
+      transform: translateX(-3px);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <a href="#" class="logo" onclick="showHome(); return false;">Forum</a>
+      <nav id="mainNav">
+        <!-- Navigation will be inserted here -->
+      </nav>
+      <div class="user-info" id="userInfo">
+        <!-- User info will be inserted here -->
+      </div>
+    </div>
+  </header>
+
+  <div class="container" id="app">
+    <!-- Content will be dynamically inserted here -->
+  </div>
+
+  <script>
+    // State Management
+    let currentUser = null;
+    let currentView = 'home';
+    let currentThreadId = null;
+
+    // Initialize app
+    async function init() {
+      // Check if user is logged in
+      const savedUser = localStorage.getItem('currentUser');
+      if (savedUser) {
+        currentUser = savedUser;
+      }
+      
+      await showHome();
+      updateNav();
+    }
+
+    // Navigation
+    function updateNav() {
+      const nav = document.getElementById('mainNav');
+      const userInfo = document.getElementById('userInfo');
+      
+      if (currentUser) {
+        nav.innerHTML = `
+          <a href="#" onclick="showHome(); return false;">threads</a>
+          <a href="#" onclick="showNewThread(); return false;">submit</a>
+        `;
+        userInfo.innerHTML = `
+          <span>${currentUser}</span>
+          <a href="#" onclick="logout(); return false;">logout</a>
+        `;
+      } else {
+        nav.innerHTML = `
+          <a href="#" onclick="showHome(); return false;">threads</a>
+        `;
+        userInfo.innerHTML = `
+          <a href="#" onclick="showLogin(); return false;">login</a>
+          <a href="#" onclick="showRegister(); return false;">register</a>
+        `;
+      }
+    }
+
+    // Show different views
+    async function showHome() {
+      currentView = 'home';
+      const app = document.getElementById('app');
+      
+      const threads = await getAllThreads();
+      
+      let html = '<div class="thread-list">';
+      
+      if (threads.length === 0) {
+        html += '<div class="message">No threads yet. Be the first to post!</div>';
+      } else {
+        for (const thread of threads) {
+          const comments = await getThreadComments(thread.id);
+          const userLiked = thread.likedBy && thread.likedBy.includes(currentUser);
+          
+          html += `
+            <div class="thread-item">
+              <div class="thread-header">
+                <div class="vote-section">
+                  <span class="upvote ${userLiked ? 'liked' : ''}" onclick="toggleLike('thread', '${thread.id}')">▲</span>
+                  <span class="vote-count">${thread.likes || 0}</span>
+                </div>
+                <div class="thread-content">
+                  <div class="thread-title">
+                    <a href="#" onclick="showThread('${thread.id}'); return false;">${escapeHtml(thread.title)}</a>
+                  </div>
+                  <div class="thread-meta">
+                    by ${thread.author} | ${formatTime(thread.timestamp)} | ${comments.length} comments
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+      
+      html += '</div>';
+      app.innerHTML = html;
+    }
+
+    async function showThread(threadId) {
+      currentView = 'thread';
+      currentThreadId = threadId;
+      const app = document.getElementById('app');
+      
+      try {
+        const thread = await getThread(threadId);
+        const comments = await getThreadComments(threadId);
+        const userLiked = thread.likedBy && thread.likedBy.includes(currentUser);
+        
+        let html = `
+          <a href="#" class="back-link" onclick="showHome(); return false;">← back to threads</a>
+          
+          <div class="thread-detail">
+            <div class="thread-header">
+              <div class="vote-section">
+                <span class="upvote ${userLiked ? 'liked' : ''}" onclick="toggleLike('thread', '${thread.id}')">▲</span>
+                <span class="vote-count">${thread.likes || 0}</span>
+              </div>
+              <div class="thread-content">
+                <h1>${escapeHtml(thread.title)}</h1>
+                <div class="thread-meta">
+                  by ${thread.author} | ${formatTime(thread.timestamp)}
+                </div>
+              </div>
+            </div>
+            ${thread.content ? `<div class="thread-body">${escapeHtml(thread.content)}</div>` : ''}
+          </div>
+          
+          ${currentUser ? `
+            <div class="new-thread-form">
+              <h2>Add a comment</h2>
+              <form onsubmit="submitComment(event)">
+                <div class="form-group">
+                  <textarea id="commentText" placeholder="What are your thoughts?" required></textarea>
+                </div>
+                <button type="submit">Post Comment</button>
+              </form>
+            </div>
+          ` : '<div class="message">Please <a href="#" onclick="showLogin(); return false;">login</a> to comment.</div>'}
+          
+          <div class="comments-section">
+            <h2>${comments.length} Comments</h2>
+            <div id="commentsList">
+        `;
+        
+        for (const comment of comments) {
+          const commentLiked = comment.likedBy && comment.likedBy.includes(currentUser);
+          html += `
+            <div class="comment">
+              <div class="comment-header">
+                <span class="comment-author">${comment.author}</span>
+                <span class="comment-time">${formatTime(comment.timestamp)}</span>
+              </div>
+              <div class="comment-body">${escapeHtml(comment.content)}</div>
+              <div class="comment-actions">
+                <a onclick="toggleLike('comment', '${comment.id}')" class="${commentLiked ? 'liked' : ''}">
+                  ▲ ${comment.likes || 0}
+                </a>
+              </div>
+            </div>
+          `;
+        }
+        
+        html += '</div></div>';
+        app.innerHTML = html;
+      } catch (error) {
+        app.innerHTML = `<div class="message error">Thread not found.</div>`;
+      }
+    }
+
+    function showLogin() {
+      currentView = 'login';
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="auth-container">
+          <h2>Login</h2>
+          <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+              <label for="username">Username</label>
+              <input type="text" id="username" required>
+            </div>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input type="password" id="password" required>
+            </div>
+            <button type="submit">Login</button>
+          </form>
+          <div class="auth-toggle">
+            Don't have an account? <a href="#" onclick="showRegister(); return false;">Register</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function showRegister() {
+      currentView = 'register';
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="auth-container">
+          <h2>Create Account</h2>
+          <form onsubmit="handleRegister(event)">
+            <div class="form-group">
+              <label for="username">Username</label>
+              <input type="text" id="username" required minlength="3">
+            </div>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input type="password" id="password" required minlength="6">
+            </div>
+            <button type="submit">Create Account</button>
+          </form>
+          <div class="auth-toggle">
+            Already have an account? <a href="#" onclick="showLogin(); return false;">Login</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function showNewThread() {
+      if (!currentUser) {
+        showLogin();
+        return;
+      }
+      
+      currentView = 'newThread';
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <a href="#" class="back-link" onclick="showHome(); return false;">← back to threads</a>
+        
+        <div class="new-thread-form">
+          <h2>Submit a new thread</h2>
+          <form onsubmit="submitThread(event)">
+            <div class="form-group">
+              <label for="threadTitle">Title</label>
+              <input type="text" id="threadTitle" required>
+            </div>
+            <div class="form-group">
+              <label for="threadContent">Content (optional)</label>
+              <textarea id="threadContent"></textarea>
+            </div>
+            <button type="submit">Submit</button>
+            <button type="button" class="secondary-btn" onclick="showHome()">Cancel</button>
+          </form>
+        </div>
+      `;
+    }
+
+    // Authentication handlers
+    async function handleLogin(event) {
+      event.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      
+      try {
+        const user = await window.storage.get(`user:${username}`);
+        
+        if (!user) {
+          showMessage('User not found', 'error');
+          return;
+        }
+        
+        const userData = JSON.parse(user.value);
+        
+        if (userData.password !== password) {
+          showMessage('Invalid password', 'error');
+          return;
+        }
+        
+        currentUser = username;
+        localStorage.setItem('currentUser', username);
+        updateNav();
+        showHome();
+        showMessage('Logged in successfully!', 'success');
+      } catch (error) {
+        showMessage('User not found', 'error');
+      }
+    }
+
+    async function handleRegister(event) {
+      event.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      
+      try {
+        const existingUser = await window.storage.get(`user:${username}`);
+        if (existingUser) {
+          showMessage('Username already exists', 'error');
+          return;
+        }
+      } catch (error) {
+        // User doesn't exist, which is what we want
+      }
+      
+      const userData = {
+        password: password,
+        createdAt: Date.now()
+      };
+      
+      await window.storage.set(`user:${username}`, JSON.stringify(userData));
+      
+      currentUser = username;
+      localStorage.setItem('currentUser', username);
+      updateNav();
+      showHome();
+      showMessage('Account created successfully!', 'success');
+    }
+
+    function logout() {
+      currentUser = null;
+      localStorage.removeItem('currentUser');
+      updateNav();
+      showHome();
+      showMessage('Logged out successfully', 'success');
+    }
+
+    // Thread handlers
+    async function submitThread(event) {
+      event.preventDefault();
+      
+      const title = document.getElementById('threadTitle').value;
+      const content = document.getElementById('threadContent').value;
+      
+      const threadId = 'thread_' + Date.now();
+      const thread = {
+        id: threadId,
+        title: title,
+        content: content,
+        author: currentUser,
+        timestamp: Date.now(),
+        likes: 0,
+        likedBy: []
+      };
+      
+      await window.storage.set(threadId, JSON.stringify(thread));
+      
+      showHome();
+      showMessage('Thread created!', 'success');
+    }
+
+    async function submitComment(event) {
+      event.preventDefault();
+      
+      const content = document.getElementById('commentText').value;
+      
+      const commentId = 'comment_' + Date.now();
+      const comment = {
+        id: commentId,
+        threadId: currentThreadId,
+        content: content,
+        author: currentUser,
+        timestamp: Date.now(),
+        likes: 0,
+        likedBy: []
+      };
+      
+      await window.storage.set(commentId, JSON.stringify(comment));
+      
+      showThread(currentThreadId);
+      showMessage('Comment posted!', 'success');
+    }
+
+    // Like functionality
+    async function toggleLike(type, id) {
+      if (!currentUser) {
+        showMessage('Please login to vote', 'error');
+        return;
+      }
+      
+      try {
+        const result = await window.storage.get(id);
+        const item = JSON.parse(result.value);
+        
+        if (!item.likedBy) {
+          item.likedBy = [];
+        }
+        
+        const userIndex = item.likedBy.indexOf(currentUser);
+        
+        if (userIndex > -1) {
+          // Unlike
+          item.likedBy.splice(userIndex, 1);
+          item.likes = (item.likes || 0) - 1;
+        } else {
+          // Like
+          item.likedBy.push(currentUser);
+          item.likes = (item.likes || 0) + 1;
+        }
+        
+        await window.storage.set(id, JSON.stringify(item));
+        
+        // Refresh current view
+        if (currentView === 'home') {
+          showHome();
+        } else if (currentView === 'thread') {
+          showThread(currentThreadId);
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+      }
+    }
+
+    // Data retrieval helpers
+    async function getAllThreads() {
+      try {
+        const keys = await window.storage.list('thread_');
+        const threads = [];
+        
+        for (const key of keys.keys) {
+          const result = await window.storage.get(key);
+          threads.push(JSON.parse(result.value));
+        }
+        
+        // Sort by timestamp descending
+        threads.sort((a, b) => b.timestamp - a.timestamp);
+        return threads;
+      } catch (error) {
+        return [];
+      }
+    }
+
+    async function getThread(threadId) {
+      const result = await window.storage.get(threadId);
+      return JSON.parse(result.value);
+    }
+
+    async function getThreadComments(threadId) {
+      try {
+        const keys = await window.storage.list('comment_');
+        const comments = [];
+        
+        for (const key of keys.keys) {
+          const result = await window.storage.get(key);
+          const comment = JSON.parse(result.value);
+          if (comment.threadId === threadId) {
+            comments.push(comment);
+          }
+        }
+        
+        // Sort by timestamp ascending
+        comments.sort((a, b) => a.timestamp - b.timestamp);
+        return comments;
+      } catch (error) {
+        return [];
+      }
+    }
+
+    // Utility functions
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(timestamp) {
+      const now = Date.now();
+      const diff = now - timestamp;
+      
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      
+      if (minutes < 1) return 'just now';
+      if (minutes < 60) return `${minutes}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      return `${days}d ago`;
+    }
+
+    function showMessage(text, type) {
+      const app = document.getElementById('app');
+      const message = document.createElement('div');
+      message.className = `message ${type}`;
+      message.textContent = text;
+      app.insertBefore(message, app.firstChild);
+      
+      setTimeout(() => {
+        message.style.opacity = '0';
+        message.style.transition = 'opacity 0.3s';
+        setTimeout(() => message.remove(), 300);
+      }, 3000);
+    }
+
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>
